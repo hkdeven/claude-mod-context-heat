@@ -1,8 +1,10 @@
 # context-heat
 
-A Claude Code mod that shows, at a glance, how full a session's context window is and whether anything is still running. It is built around one habit: write the handoff and start a new session at about 600k tokens.
+A Claude Code mod that shows, at a glance, how full a session's context window is, whether anything is still running, and how the work is doing against its estimate. It is built around one habit: write the handoff and start a new session at about 600k tokens.
 
-![The row above the message box reads Working: Claude is replying, 299k of 600k, with a strip of dots running from blue to yellow, over a faint background of small blocks](docs/screenshot.png)
+![Three sessions side by side in split view. Each has its own row above the message box: the work status, a countdown such as 17:51 left of 25 min, the context figure such as 147k of 600k, and a strip of dots that runs from blue toward orange as the context fills](docs/screenshot.png)
+
+Three sessions in split view, each with its own status, countdown, figure and dots.
 
 ## What it does
 
@@ -38,6 +40,9 @@ Start a new session afterwards. Sessions that were already open pick the mod up 
 - The background needs a Claude desktop app build that draws mod themes. The row works everywhere, the terminal included.
 - The desktop app draws one background for the whole window, so in split view the blocks follow a single session. The row and its dots are always per session.
 - Running agents are counted. Background shell commands are not visible to a mod, so they are not.
+- The countdown reads an estimate in minutes from Claude's reply: `Estimate: 10 minutes`, `Estimate: about 5 min` or `On it. Estimate 25 min`. A report of finished work, such as `estimate 15 min, actual 2`, does not start one. A new estimate replaces a running one.
+- The countdown runs until the main turn has ended and no agent is still running, so it keeps counting while background agents work.
+- In the terminal the dots are drawn as a short line of text characters.
 - The 600k limit is a constant, `LIMIT`, at the top of `hooks/register.tsx`.
 
 ## Develop

@@ -1,0 +1,6 @@
+{
+  "name": "context-heat",
+  "version": "0.1.0",
+  "description": "Background blocks that stack up and warm toward 600k context tokens, plus a row that says whether work is still running.",
+  "types": "./types/index.d.ts"
+}

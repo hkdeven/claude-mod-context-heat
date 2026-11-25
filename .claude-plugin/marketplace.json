@@ -1,0 +1,13 @@
+{
+  "name": "claude-mod-context-heat",
+  "owner": { "name": "Deven Blackburn" },
+  "plugins": [
+    {
+      "name": "context-heat",
+      "source": "./",
+      "description": "Background blocks that stack up and warm toward 600k context tokens, plus a row that says whether work is still running.",
+      "version": "0.1.0",
+      "author": { "name": "Deven Blackburn" }
+    }
+  ]
+}

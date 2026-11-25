@@ -7,10 +7,11 @@ A Claude Code mod that shows, at a glance, how full a session's context window i
 ## What it does
 
 - **A row above the message box, one per session.** It says `Working: Claude is replying`, `Working: 3 agents running` or `Idle: nothing running`, with the session's own figure (`283k of 600k`) and a strip of 240 dots, one for every 2.5k tokens. The dots run from cool blue through green, yellow and orange to red.
+- **A work countdown.** When Claude states an estimate, for example `Estimate: 10 minutes`, the row counts down (`6:40 left of 10 min`). Past zero it turns amber and counts the overrun (`3:12 over the 10 min estimate`). It clears when the session goes idle. So that there is always one to show, the mod attaches a short note to each prompt asking Claude to state an estimate before any piece of work.
 - **A faint background of small blocks in the desktop app.** They stack up from the bottom of the window and warm in the same colours as the context grows.
 - **At 600k** the row reads `600k: write the handoff` and the background pulses slowly. From 600k to 750k everything deepens to dark red.
 
-It reads the session's own state, so it costs no tokens.
+The display reads the session's own state. The only tokens it adds are the estimate note, about 70 per prompt.
 
 ## Install
 

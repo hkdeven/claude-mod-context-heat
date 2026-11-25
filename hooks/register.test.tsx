@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { blocksLit, figure, heat, overrun, scene, strip, stripLit, workLabel } from './register'
+import { blocksLit, etaLabel, figure, heat, overrun, parseEstimate, scene, strip, stripLit, workLabel } from './register'
 
 const BAND = {
   plugin: 'context-heat',
@@ -55,6 +55,25 @@ test('the work row names what is running', () => {
   expect(workLabel(true, 0)).toBe('Working: Claude is replying')
   expect(workLabel(false, 1)).toBe('Working: 1 agent running')
   expect(workLabel(true, 3)).toBe('Working: Claude is replying, 3 agents running')
+})
+
+test('an estimate is read from a reply, never from a report of finished work', () => {
+  expect(parseEstimate('On it. Estimate 25 min; I will push it when it passes.')).toBe(25)
+  expect(parseEstimate('Estimate: 15 minutes.')).toBe(15)
+  expect(parseEstimate('Built (estimate 15 min, actual 2): the row counts down.')).toBe(null)
+  expect(parseEstimate('Estimate: 10 minutes')).toBe(10)
+  expect(parseEstimate('On it.\n\nEstimate: 25 min.')).toBe(25)
+  expect(parseEstimate('**Estimate:** about 5 minutes')).toBe(5)
+  expect(parseEstimate('Built (estimate 5 min, actual 3).')).toBe(null)
+  expect(parseEstimate('Live on uat. Estimate 35, actual 42.')).toBe(null)
+  expect(parseEstimate('Estimate: 0 minutes')).toBe(null)
+})
+
+test('the countdown counts down, then counts the overrun', () => {
+  expect(etaLabel(10, 0, 0)).toEqual({ text: '10:00 left of 10 min', isOver: false })
+  expect(etaLabel(10, 0, 200_000)).toEqual({ text: '6:40 left of 10 min', isOver: false })
+  expect(etaLabel(10, 0, 600_000)).toEqual({ text: '0:00 left of 10 min', isOver: false })
+  expect(etaLabel(10, 0, 792_000)).toEqual({ text: '3:12 over the 10 min estimate', isOver: true })
 })
 
 test('the row says idle with nothing running', async $ => {

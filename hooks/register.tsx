@@ -1,6 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
+import type { HeatEta } from '../types'
+
 const SCENE = 'heat-blocks'
 const LIMIT = 600_000
 const COLS = 144
@@ -14,6 +16,17 @@ const HANDOFF = '600k: write the handoff'
 
 const tokens = atom({ plugin: 'context-heat', key: 'tokens' } as const, 0)
 const agents = atom({ plugin: 'context-heat', key: 'agents' } as const, 0)
+const eta = atom({ plugin: 'context-heat', key: 'eta' } as const, null)
+const clock = atom({ plugin: 'context-heat', key: 'clock' } as const, 0)
+
+const ESTIMATE_RULE =
+  'Before starting any piece of work that edits files or runs commands, state one total time estimate ' +
+  'on a line of its own, in exactly this form: "Estimate: N minutes", N a whole number. State it once ' +
+  'for each piece of work, before the first tool call, and again only when a new piece of work begins. ' +
+  'A plain answer that needs no work gets no estimate.'
+
+let timer: { cancel: () => void } | null = null
+let isMainRunning = false
 
 const STOPS = [
   [55, 138, 221],
@@ -126,6 +139,61 @@ export function workLabel(isReplying: boolean, running: number): string | null {
   return parts.length === 0 ? null : `Working: ${parts.join(', ')}`
 }
 
+// The minutes in "Estimate: 10 minutes" or "On it. Estimate 25 min"; null where a reply states none.
+// A report of work already done ("estimate 5 min, actual 3") is not a new estimate.
+export function parseEstimate(text: string): number | null {
+  const found = /\bestimate[: \t*_]+(?:about[ \t]+|~)?(\d{1,3})[ \t]*min(?:ute)?s?\b(?![^.\n]*\bactual\b)/i.exec(text)
+  const minutes = found === null ? 0 : Number(found[1])
+
+  return minutes > 0 ? minutes : null
+}
+
+// "6:40 left of 10 min", or "3:12 over the 10 min estimate" once it has run past.
+export function etaLabel(minutes: number, startedAt: number, now: number): { text: string; isOver: boolean } {
+  const left = minutes * 60 - Math.max(0, Math.floor((now - startedAt) / 1000))
+  const seconds = Math.abs(left)
+  const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+
+  return left >= 0
+    ? { text: `${time} left of ${minutes} min`, isOver: false }
+    : { text: `${time} over the ${minutes} min estimate`, isOver: true }
+}
+
+async function tick($: EngineInterface): Promise<void> {
+  const now = await $.clock.now()
+  await update($, clock, () => now)
+}
+
+function startTimer($: EngineInterface): void {
+  if (timer === null) {
+    timer = $.clock.every(1000, () => {
+      void tick($).catch(() => undefined)
+    })
+  }
+}
+
+async function startEta($: EngineInterface, minutes: number): Promise<void> {
+  const startedAt = await $.clock.now()
+  await update($, clock, () => startedAt)
+  const started: HeatEta = { minutes, startedAt }
+  await update($, eta, () => started)
+  startTimer($)
+}
+
+// The countdown ends when the main turn is over and no agent is still running.
+async function settle($: EngineInterface): Promise<void> {
+  if (isMainRunning || (await read($, agents)) > 0) {
+    return
+  }
+
+  timer?.cancel()
+  timer = null
+
+  if ((await read($, eta)) !== null) {
+    await update($, eta, () => null)
+  }
+}
+
 async function countAgents($: EngineInterface): Promise<void> {
   const list = await $.agent.list()
   const running = list.filter(
@@ -176,16 +244,41 @@ export const register: Register = on => {
     return next(e)
   })
 
+  on('prompt.submit', ($, e, next) => next({ ...e, context: [...(e.context ?? []), ESTIMATE_RULE] }))
+
   on('turn.start', async ($, e, next) => {
+    if (e.agentId === undefined) {
+      isMainRunning = true
+    }
+
     const result = await next(e)
     await countAgents($).catch(() => undefined)
 
     return result
   })
 
+  on('turn.step', async function* ($, e, next) {
+    const result = yield* next(e)
+
+    if (e.agentId === undefined) {
+      const minutes = parseEstimate(result.answer)
+
+      if (minutes !== null) {
+        await startEta($, minutes).catch(() => undefined)
+      }
+    }
+
+    return result
+  })
+
   on('turn.complete', async ($, e, next) => {
+    if (e.agentId === undefined) {
+      isMainRunning = false
+    }
+
     const result = await next(e)
     await countAgents($).catch(() => undefined)
+    await settle($).catch(() => undefined)
 
     return result
   })
@@ -222,6 +315,8 @@ export const register: Register = on => {
     const running = await read($, agents)
     const count = await read($, tokens)
     const label = workLabel(e.props.isWorking, running)
+    const estimate = await read($, eta)
+    const countdown = estimate === null ? null : etaLabel(estimate.minutes, estimate.startedAt, await read($, clock))
     const table = $.ui.resolve(e)
     const { Box, Progress, Text } = table
     const blocks =
@@ -234,7 +329,12 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         <Box flexDirection="row" justifyContent="space-between">
-          {label === null ? <Text dimColor>Idle: nothing running</Text> : <Progress label={label} />}
+          <Box flexDirection="row" gap={2}>
+            {label === null ? <Text dimColor>Idle: nothing running</Text> : <Progress label={label} />}
+            {countdown === null ? null : (
+              <Text color={countdown.isOver ? 'warning' : undefined}>{countdown.text}</Text>
+            )}
+          </Box>
           <Text color={count >= LIMIT ? 'warning' : undefined} dimColor={count < LIMIT}>
             {figure(count)}
           </Text>

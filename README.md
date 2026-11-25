@@ -2,7 +2,7 @@
 
 A Claude Code mod that shows, at a glance, how full a session's context window is, whether anything is still running, and how the work is doing against its estimate. It is built around one habit: write the handoff and start a new session at about 600k tokens.
 
-![The row above the message box reads Working: Claude is replying, 5:57 left of 6 min, and 362k of 600k, over a strip of dots that runs from blue through green and yellow to orange](docs/screenshot.png)
+![The row above the message box reads Working: Claude is replying, 5:57 left of 6 min, and 362k of 600k, over a strip of dots that runs from blue through green and yellow to orange](docs/row.png)
 
 The row above the message box: work status, countdown, context figure and dots.
 

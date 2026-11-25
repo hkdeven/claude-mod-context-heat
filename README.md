@@ -2,6 +2,8 @@
 
 A Claude Code mod that shows, at a glance, how full a session's context window is and whether anything is still running. It is built around one habit: write the handoff and start a new session at about 600k tokens.
 
+![The row above the message box reads Working: Claude is replying, 299k of 600k, with a strip of dots running from blue to yellow, over a faint background of small blocks](docs/screenshot.png)
+
 ## What it does
 
 - **A row above the message box, one per session.** It says `Working: Claude is replying`, `Working: 3 agents running` or `Idle: nothing running`, with the session's own figure (`283k of 600k`) and a strip of 240 dots, one for every 2.5k tokens. The dots run from cool blue through green, yellow and orange to red.

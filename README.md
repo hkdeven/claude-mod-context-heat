@@ -1,4 +1,4 @@
-# context-heat
+# claude-mod-context-heat
 
 A Claude Code mod that shows, at a glance, how full a session's context window is, whether anything is still running, and how the work is doing against its estimate. It is built around one habit: write the handoff and start a new session at about 600k tokens.
 

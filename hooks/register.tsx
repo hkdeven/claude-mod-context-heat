@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { HeatEta } from '../types'
+import type { HeatEta, HeatTask } from '../types'
 
 const SCENE = 'heat-blocks'
 const LIMIT = 600_000
@@ -18,6 +18,16 @@ const tokens = atom({ plugin: 'context-heat', key: 'tokens' } as const, 0)
 const agents = atom({ plugin: 'context-heat', key: 'agents' } as const, 0)
 const eta = atom({ plugin: 'context-heat', key: 'eta' } as const, null)
 const clock = atom({ plugin: 'context-heat', key: 'clock' } as const, 0)
+const tasks = atom({ plugin: 'context-heat', key: 'tasks' } as const, [])
+
+// A background task nothing has reported on for this long is taken to be gone.
+const TASK_TTL = 12 * 60 * 60 * 1000
+
+const TASK_WORDS: Record<string, readonly [string, string]> = {
+  shell: ['command', 'commands'],
+  workflow: ['workflow', 'workflows'],
+  monitor: ['monitor', 'monitors'],
+}
 
 const ESTIMATE_RULE =
   'Before starting any piece of work that edits files or runs commands, state one total time estimate ' +
@@ -125,7 +135,25 @@ export function figure(count: number): string {
   return count >= LIMIT ? `${thousands}k: write the handoff` : `${thousands}k of 600k`
 }
 
-export function workLabel(isReplying: boolean, running: number): string | null {
+// Background work the engine still holds for the session, by kind: commands, workflows, monitors.
+// Subagents are left out here: the agent count already has them.
+export function backgroundParts(kinds: readonly string[]): string[] {
+  const counts = new Map<string, number>()
+
+  for (const kind of kinds) {
+    if (kind !== 'subagent') {
+      counts.set(kind, (counts.get(kind) ?? 0) + 1)
+    }
+  }
+
+  return [...counts].map(([kind, count]) => {
+    const words = TASK_WORDS[kind] ?? ['background task', 'background tasks']
+
+    return `${count} ${count === 1 ? words[0] : words[1]} running`
+  })
+}
+
+export function workLabel(isReplying: boolean, running: number, kinds: readonly string[] = []): string | null {
   const parts: string[] = []
 
   if (isReplying) {
@@ -135,6 +163,8 @@ export function workLabel(isReplying: boolean, running: number): string | null {
   if (running > 0) {
     parts.push(`${running} ${running === 1 ? 'agent' : 'agents'} running`)
   }
+
+  parts.push(...backgroundParts(kinds))
 
   return parts.length === 0 ? null : `Working: ${parts.join(', ')}`
 }
@@ -180,9 +210,11 @@ async function startEta($: EngineInterface, minutes: number): Promise<void> {
   startTimer($)
 }
 
-// The countdown ends when the main turn is over and no agent is still running.
+// The countdown ends when the main turn is over and no agent or background task is still running.
 async function settle($: EngineInterface): Promise<void> {
-  if (isMainRunning || (await read($, agents)) > 0) {
+  const held = (await read($, tasks)).length
+
+  if (isMainRunning || held > 0 || (await read($, agents)) > 0) {
     return
   }
 
@@ -192,6 +224,58 @@ async function settle($: EngineInterface): Promise<void> {
   if ((await read($, eta)) !== null) {
     await update($, eta, () => null)
   }
+}
+
+// The ids of background tasks a notification says have ended.
+export function endedTasks(text: string): string[] {
+  const ended: string[] = []
+  const blocks = text.split('<task-notification>').slice(1)
+
+  for (const block of blocks) {
+    const id = /<task-id>([^<]+)<\/task-id>/.exec(block)?.[1]
+    const status = /<status>([^<]+)<\/status>/.exec(block)?.[1]
+
+    if (id !== undefined && status !== undefined && status !== 'running' && status !== 'pending') {
+      ended.push(id.trim())
+    }
+  }
+
+  return ended
+}
+
+// The kinds of the background tasks still held, the stale ones dropped.
+export function liveKinds(held: readonly HeatTask[], now: number): string[] {
+  return held.filter(task => now - task.at < TASK_TTL).map(task => task.kind)
+}
+
+async function addTask($: EngineInterface, id: string, kind: string): Promise<void> {
+  const at = await $.clock.now()
+  await update($, tasks, held => [...(held ?? []).filter(task => task.id !== id), { id, kind, at }])
+}
+
+async function dropTasks($: EngineInterface, ids: readonly string[]): Promise<void> {
+  const held = await read($, tasks)
+
+  if (held.some(task => ids.includes(task.id))) {
+    await update($, tasks, now => (now ?? []).filter(task => !ids.includes(task.id)))
+  }
+}
+
+// Drops tasks nothing has reported on for a long time, so a lost notice cannot leave the row on Working for good.
+async function pruneTasks($: EngineInterface): Promise<void> {
+  const held = await read($, tasks)
+  const now = await $.clock.now()
+
+  if (liveKinds(held, now).length !== held.length) {
+    await update($, tasks, list => (list ?? []).filter(task => now - task.at < TASK_TTL))
+  }
+}
+
+// Where the engine's own Stop report reaches the mod, it is the whole truth.
+async function setTasks($: EngineInterface, reported: readonly { id: string; type: string }[]): Promise<void> {
+  const at = await $.clock.now()
+  const next: HeatTask[] = reported.filter(task => task.type !== 'subagent').map(task => ({ id: task.id, kind: task.type, at }))
+  await update($, tasks, () => next)
 }
 
 async function countAgents($: EngineInterface): Promise<void> {
@@ -244,7 +328,50 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('prompt.submit', ($, e, next) => next({ ...e, context: [...(e.context ?? []), ESTIMATE_RULE] }))
+  on('prompt.submit', async ($, e, next) => {
+    // A background task's notification: note which tasks ended, and add no estimate note to it.
+    if (e.origin?.kind === 'task-notification') {
+      await dropTasks($, endedTasks(e.text)).catch(() => undefined)
+      await settle($).catch(() => undefined)
+
+      return next(e)
+    }
+
+    return next({ ...e, context: [...(e.context ?? []), ESTIMATE_RULE] })
+  })
+
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    const ran = await next(e)
+    const id = ran.deny === undefined ? (ran.result as { backgroundTaskId?: string } | undefined)?.backgroundTaskId : undefined
+
+    if (id !== undefined) {
+      await addTask($, id, 'shell').catch(() => undefined)
+    }
+
+    return ran
+  })
+
+  on('tool.call', { tool: 'Workflow' }, async ($, e, next) => {
+    const ran = await next(e)
+    const id = ran.deny === undefined ? (ran.result as { taskId?: string } | undefined)?.taskId : undefined
+
+    if (id !== undefined) {
+      await addTask($, id, 'workflow').catch(() => undefined)
+    }
+
+    return ran
+  })
+
+  on('tool.call', { tool: 'TaskStop' }, async ($, e, next) => {
+    const ran = await next(e)
+    const id = ran.deny === undefined ? (ran.result as { task_id?: string } | undefined)?.task_id : undefined
+
+    if (id !== undefined) {
+      await dropTasks($, [id]).catch(() => undefined)
+    }
+
+    return ran
+  })
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
@@ -278,7 +405,20 @@ export const register: Register = on => {
 
     const result = await next(e)
     await countAgents($).catch(() => undefined)
+    await pruneTasks($).catch(() => undefined)
     await settle($).catch(() => undefined)
+
+    return result
+  })
+
+  on('classic.Stop', async ($, e, next) => {
+    const result = await next(e)
+
+    if (e.agent_id === undefined) {
+      await setTasks($, e.background_tasks ?? []).catch(() => undefined)
+      await countAgents($).catch(() => undefined)
+      await settle($).catch(() => undefined)
+    }
 
     return result
   })
@@ -314,7 +454,7 @@ export const register: Register = on => {
 
     const running = await read($, agents)
     const count = await read($, tokens)
-    const label = workLabel(e.props.isWorking, running)
+    const label = workLabel(e.props.isWorking, running, (await read($, tasks)).map(task => task.kind))
     const estimate = await read($, eta)
     const countdown = estimate === null ? null : etaLabel(estimate.minutes, estimate.startedAt, await read($, clock))
     const table = $.ui.resolve(e)

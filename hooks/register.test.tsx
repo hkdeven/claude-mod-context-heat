@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { blocksLit, etaLabel, figure, heat, overrun, parseEstimate, scene, strip, stripLit, workLabel } from './register'
+import { blocksLit, endedTasks, etaLabel, liveKinds, figure, heat, overrun, parseEstimate, scene, strip, stripLit, workLabel } from './register'
 
 const BAND = {
   plugin: 'context-heat',
@@ -55,6 +55,12 @@ test('the work row names what is running', () => {
   expect(workLabel(true, 0)).toBe('Working: Claude is replying')
   expect(workLabel(false, 1)).toBe('Working: 1 agent running')
   expect(workLabel(true, 3)).toBe('Working: Claude is replying, 3 agents running')
+  expect(workLabel(false, 0, ['shell'])).toBe('Working: 1 command running')
+  expect(workLabel(false, 1, ['shell', 'shell', 'workflow', 'subagent'])).toBe(
+    'Working: 1 agent running, 2 commands running, 1 workflow running',
+  )
+  expect(workLabel(false, 0, ['subagent'])).toBe(null)
+  expect(workLabel(false, 0, ['remote'])).toBe('Working: 1 background task running')
 })
 
 test('an estimate is read from a reply, never from a report of finished work', () => {
@@ -74,6 +80,26 @@ test('the countdown counts down, then counts the overrun', () => {
   expect(etaLabel(10, 0, 200_000)).toEqual({ text: '6:40 left of 10 min', isOver: false })
   expect(etaLabel(10, 0, 600_000)).toEqual({ text: '0:00 left of 10 min', isOver: false })
   expect(etaLabel(10, 0, 792_000)).toEqual({ text: '3:12 over the 10 min estimate', isOver: true })
+})
+
+test('a task notification names the tasks that ended', () => {
+  const done = '<task-notification>\n<task-id>b4q69mqkt</task-id>\n<status>completed</status>\n</task-notification>'
+  const going = '<task-notification>\n<task-id>abc</task-id>\n<status>running</status>\n</task-notification>'
+
+  expect(endedTasks(done)).toEqual(['b4q69mqkt'])
+  expect(endedTasks(going)).toEqual([])
+  expect(endedTasks(done + going + done.replace('b4q69mqkt', 'zzz').replace('completed', 'failed'))).toEqual(['b4q69mqkt', 'zzz'])
+  expect(endedTasks('no notification here')).toEqual([])
+})
+
+test('held background tasks count until they go stale', () => {
+  const held = [
+    { id: 'a', kind: 'shell', at: 0 },
+    { id: 'b', kind: 'workflow', at: 1000 },
+  ]
+
+  expect(liveKinds(held, 2000)).toEqual(['shell', 'workflow'])
+  expect(liveKinds(held, 12 * 60 * 60 * 1000 + 500)).toEqual(['workflow'])
 })
 
 test('the row says idle with nothing running', async $ => {

@@ -12,6 +12,10 @@ Each session gets a row above the message box. It says whether work is running, 
 
 ## Features
 
+![Four example rows above the message box. Working, with the agent list open: two agents, each with its own countdown such as 9:42 left of 12 min, the work countdown 6:40 left of 10 min, Cache warm, Compacted 1 time and 362k of 600k. Waiting on you: a question is open, 6 min, with Cache cold in 0:48. At 586k a notice reads 585k: run /handoff, then open a new session, beside a Mac notification ACV testing personas: done, estimate 25, actual 22. Past 600k the row reads 690k: write the handoff and the dots have turned deep red. Each example is tagged with the switch names of the features it shows](docs/features.png)
+
+A mockup of every feature, each tagged with its switch name. The estimate note and the sleep fix have no look of their own.
+
 Each feature has a switch name, used in both ways of turning it off (see below).
 
 | Feature | What it does | Switch |

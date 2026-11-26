@@ -26,9 +26,9 @@ export const FEATURES = {
   redPastLimit: true,
   // Once per session at 585k, a notice to run /handoff; also adds the /handoff command.
   handoffNudge: true,
-  // "Cache warm", then "Cache cold in m:ss", then "Cache cold", on the right of the row, beside the figure.
+  // "Cache warm", then "Cache cold in m:ss", then "Cache cold", on a small line under the dots.
   cacheTimer: true,
-  // "Compacted 2 times" beside the cache timer; hidden until the first compaction.
+  // "Compacted 2 times" on the small line under the dots; hidden until the first compaction.
   compactionCount: true,
   // The row turns amber and says "Waiting on you" while a question or a permission prompt is open.
   waitingOnYou: true,
@@ -133,6 +133,22 @@ export function features(options: PluginOptions): Features {
   on.estimateNote = on.estimateNote && (on.countdown || on.notifications)
 
   return on
+}
+
+// Icons for the cache and compaction line: a database and two arrows pointing in, 12px, a dim grey that
+// reads on light and dark.
+const CACHE_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="#8a8a8a" ' +
+  'stroke-width="1.2" stroke-linecap="round"><ellipse cx="6" cy="2.8" rx="4" ry="1.6"/>' +
+  '<path d="M2 2.8v6.4c0 .9 1.8 1.6 4 1.6s4-.7 4-1.6V2.8"/><path d="M2 6c0 .9 1.8 1.6 4 1.6s4-.7 4-1.6"/></svg>'
+const COMPACT_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="#8a8a8a" ' +
+  'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 .8v3.6M4.2 2.8 6 4.6 7.8 2.8"/>' +
+  '<path d="M6 11.2V7.6M4.2 9.2 6 7.4 7.8 9.2"/><path d="M2 6h8"/></svg>'
+
+// Rows the row's tree takes: the head line, the dots, the cache and compaction line, one per listed agent.
+export function rowsOf(hasDots: boolean, hasMeta: boolean, agentLines: number): number {
+  return 1 + (hasDots ? 1 : 0) + (hasMeta ? 1 : 0) + agentLines
 }
 
 // Whether the row above the message box has anything to show.
@@ -1029,6 +1045,31 @@ export const register: Register = (on, options) => {
         <Text dimColor>{'●'.repeat(Math.floor(stripLit(count) / 10)) + '○'.repeat(24 - Math.floor(stripLit(count) / 10))}</Text>
       )
 
+      const icon = (source: string, alt: string) =>
+        'Svg' in table ? <table.Svg source={source} alt={alt} width={12} height={12} /> : null
+      const meta =
+        cached === null && compacted === null ? null : (
+          <Box flexDirection="row" gap={2}>
+            {cached === null ? null : (
+              <Box flexDirection="row" gap={1}>
+                {icon(CACHE_ICON, 'Cache')}
+                <Text color={cached.isWarning ? 'warning' : undefined} dimColor={!cached.isWarning}>
+                  {cached.text}
+                </Text>
+              </Box>
+            )}
+            {compacted === null ? null : (
+              <Box flexDirection="row" gap={1}>
+                {icon(COMPACT_ICON, 'Compactions')}
+                <Text dimColor>{compacted}</Text>
+              </Box>
+            )}
+          </Box>
+        )
+      // The band shows `maxRows` rows whole and scrolls a taller tree. Where the own line would not fit,
+      // its words join the head line instead, so they are never out of view.
+      const isMetaInHead = meta !== null && rowsOf(blocks !== null, true, team.length) > e.props.maxRows
+
       return (
         <Box flexDirection="column">
           <Box flexDirection="row" justifyContent="space-between">
@@ -1039,12 +1080,7 @@ export const register: Register = (on, options) => {
               )}
             </Box>
             <Box flexDirection="row" gap={2}>
-              {cached === null ? null : (
-                <Text color={cached.isWarning ? 'warning' : undefined} dimColor={!cached.isWarning}>
-                  {cached.text}
-                </Text>
-              )}
-              {compacted === null ? null : <Text dimColor>{compacted}</Text>}
+              {isMetaInHead ? meta : null}
               {F.contextFigure ? (
                 <Text color={isLimit ? 'warning' : undefined} dimColor={!isLimit}>
                   {figure(count, F.handoffWarning)}
@@ -1052,6 +1088,8 @@ export const register: Register = (on, options) => {
               ) : null}
             </Box>
           </Box>
+          {blocks}
+          {isMetaInHead ? null : meta}
           {team.length === 0 ? null : (
             <Box flexDirection="column" paddingLeft={2}>
               {team.map(agent => {
@@ -1068,7 +1106,6 @@ export const register: Register = (on, options) => {
               })}
             </Box>
           )}
-          {blocks}
         </Box>
       )
     })

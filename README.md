@@ -12,30 +12,99 @@ Each session gets a row above the message box. It says whether work is running, 
 
 ## Features
 
-![Four example rows above the message box. Working, with the agent list open: two agents, each with its own countdown such as 9:42 left of 12 min, the work countdown 6:40 left of 10 min, Cache warm, Compacted 1 time and 362k of 600k. Waiting on you: a question is open, 6 min, with Cache cold in 0:48. At 586k a notice reads 585k: run /handoff, then open a new session, beside a Mac notification ACV testing personas: done, estimate 25, actual 22. Past 600k the row reads 690k: write the handoff and the dots have turned deep red. Each example is tagged with the switch names of the features it shows](docs/features.png)
-
-A mockup of every feature, each tagged with its switch name. The estimate note and the sleep fix have no look of their own.
-
 Each feature has a switch name, used in both ways of turning it off (see below).
 
-| Feature | What it does | Switch |
-| --- | --- | --- |
-| Background | Faint blocks behind the conversation in the desktop app stack up and warm from blue to red as the context fills. | `backdrop` |
-| Dots | A strip of 240 dots across the row, one for every 2.5k tokens. In the terminal it is a short line of text characters. | `dots` |
-| Context figure | The figure on the right of the row, for example `362k of 600k`. | `contextFigure` |
-| Work status | `Working: Claude is replying`, `Working: 3 agents running` or `Idle: nothing running`. | `workStatus` |
-| Background work | Background commands and workflows count as work, so a long command reads `Working: 1 command running`, not Idle. Needs `workStatus`. | `backgroundTasks` |
-| Countdown | When Claude states `Estimate: 10 minutes`, the row counts down (`6:40 left of 10 min`), then counts the overrun in amber (`3:12 over the 10 min estimate`). | `countdown` |
-| Estimate note | A short note on each prompt, about 70 tokens, asks Claude to state an estimate before any piece of work. Only added while `countdown` or `notifications` is on. | `estimateNote` |
-| Handoff warning | At 600k the status line reads `600k: write the handoff`, the figure turns to the warning colour and the background pulses slowly. | `handoffWarning` |
-| Red past the limit | From 600k to 750k the dots and blocks deepen to dark red. | `redPastLimit` |
-| Handoff nudge | Once per session, when the context first reaches 585k, a notice says `585k: run /handoff, then open a new session`. It also adds the `/handoff` command, which asks Claude to update the handoff document for the current work and then tell you to open a new session in that repo's folder. | `handoffNudge` |
-| Cache timer | On the right of the row, beside the figure: `Cache warm` while work runs, then a live `Cache cold in 4:59` once the session is idle (amber in the last minute), then `Cache cold`. | `cacheTimer` |
-| Compaction count | Beside the cache timer: `Compacted 1 time` or `Compacted 3 times`. Hidden until the first compaction. | `compactionCount` |
-| Waiting on you | While a question or a permission prompt waits on you, the row turns amber: `Waiting on you: a question is open, 6 min`. | `waitingOnYou` |
-| Notifications | A system notification when a session is done (`my-repo: done, estimate 25, actual 22`) or starts waiting on you (`my-repo: waiting on you`). Work under 30 seconds raises none. | `notifications` |
-| Agent list | Click `3 agents running` to open a list of the agents under the row, each with its own countdown (`9:42 left of 12 min`, `3:05 over 15 min`, or `running 4:12` when the agent stated no estimate). Each agent is asked to state an estimate. The list starts closed. Needs `workStatus`. | `agentList` |
-| Sleep fix | Time the Mac spends asleep or the app spends closed is not counted, and reopening the app clears work that ended with it. | `sleepFix` |
+### Background (`backdrop`)
+
+Faint blocks behind the conversation in the desktop app stack up and warm from blue to red as the context fills.
+
+![Faint blocks filling the lower half of the window, from blue at the bottom to amber higher up, behind the row and the message box](docs/features/backdrop.png)
+
+### Dots (`dots`)
+
+A strip of 240 dots across the row, one for every 2.5k tokens. In the terminal it is a short line of text characters.
+
+![The row holding only its strip of dots, lit from blue through green and yellow to orange a little past half way](docs/features/dots.png)
+
+### Context figure (`contextFigure`)
+
+The figure on the right of the row, for example `362k of 600k`.
+
+![The row with only the figure 362k of 600k on its right](docs/features/contextFigure.png)
+
+### Work status (`workStatus`)
+
+`Working: Claude is replying`, `Working: 3 agents running` or `Idle: nothing running`.
+
+![The row reading Working: Claude is replying beside a turning mark](docs/features/workStatus.png)
+
+### Background work (`backgroundTasks`)
+
+Background commands and workflows count as work, so a long command reads `Working: 1 command running`, not Idle. Needs `workStatus`.
+
+![The row reading Working: 1 command running](docs/features/backgroundTasks.png)
+
+### Countdown (`countdown`)
+
+When Claude states `Estimate: 10 minutes`, the row counts down (`6:40 left of 10 min`), then counts the overrun in amber (`3:12 over the 10 min estimate`).
+
+![The row reading Working: Claude is replying, then 6:40 left of 10 min](docs/features/countdown.png)
+
+### Estimate note (`estimateNote`)
+
+A short note on each prompt, about 70 tokens, asks Claude to state an estimate before any piece of work. Only added while `countdown` or `notifications` is on. It has no look of its own.
+
+### Handoff warning (`handoffWarning`)
+
+At 600k the status line reads `600k: write the handoff`, the figure turns to the warning colour and the background pulses slowly.
+
+![The row reading 610k: write the handoff in amber, and the status line under the message box reading 600k: write the handoff](docs/features/handoffWarning.png)
+
+### Red past the limit (`redPastLimit`)
+
+From 600k to 750k the dots and blocks deepen to dark red.
+
+![The row at 720k of 600k, every dot lit and the right half deepened to dark red](docs/features/redPastLimit.png)
+
+### Handoff nudge (`handoffNudge`)
+
+Once per session, when the context first reaches 585k, a notice says `585k: run /handoff, then open a new session`. It also adds the `/handoff` command, which asks Claude to update the handoff document for the current work and then tell you to open a new session in that repo's folder.
+
+![A notice above the message box reading 585k: run /handoff, then open a new session](docs/features/handoffNudge.png)
+
+### Cache timer (`cacheTimer`)
+
+On a small line under the dots, after a database icon: `Cache warm` while work runs, then a live `Cache cold in 4:59` once the session is idle (amber in the last minute), then `Cache cold`.
+
+![The small line of the row with a database icon and Cache cold in 0:48 in amber](docs/features/cacheTimer.png)
+
+### Compaction count (`compactionCount`)
+
+On the same small line, after an icon of two arrows pointing in: `Compacted 1 time` or `Compacted 3 times`. Hidden until the first compaction.
+
+![The small line of the row with an icon of two arrows pointing in and Compacted 1 time](docs/features/compactionCount.png)
+
+### Waiting on you (`waitingOnYou`)
+
+While a question or a permission prompt waits on you, the row turns amber: `Waiting on you: a question is open, 6 min`.
+
+![The row with an amber edge reading Waiting on you: a question is open, 6 min](docs/features/waitingOnYou.png)
+
+### Notifications (`notifications`)
+
+A system notification when a session is done (`my-repo: done, estimate 25, actual 22`) or starts waiting on you (`my-repo: waiting on you`). Work under 30 seconds raises none.
+
+![A Mac notification reading my-repo: done, with estimate 25, actual 22 under it](docs/features/notifications.png)
+
+### Agent list (`agentList`)
+
+Click `3 agents running` to open a list of the agents under the row, each with its own countdown (`9:42 left of 12 min`, `3:05 over 15 min`, or `running 4:12` when the agent stated no estimate). Each agent is asked to state an estimate. The list starts closed. Needs `workStatus`.
+
+![The row reading Working: 2 agents running, opened to list Review the diff for bugs, 9:42 left of 12 min, and Run the full test suite, 3:05 over 15 min in amber](docs/features/agentList.png)
+
+### Sleep fix (`sleepFix`)
+
+Time the Mac spends asleep or the app spends closed is not counted, and reopening the app clears work that ended with it. It has no look of its own.
 
 ## Turning a feature off
 

@@ -24,6 +24,7 @@ import {
   overrun,
   parseEstimate,
   pausedFor,
+  rowsOf,
   scene,
   strip,
   stripLit,
@@ -661,11 +662,28 @@ test('a countdown far past its estimate is dropped as stale', () => {
   expect(isStale(long, 120 * 60_000 + 6 * 3_600_000 + 1000)).toBe(true)
 })
 
-test('the cache line sits on the top row, beside the figure', async ($, on) => {
+test('the cache line sits on its own line with an icon, and joins the head line when rows run short', async ($, on) => {
   const w = world(on)
   await step($, w, '', undefined, { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 5, cache_creation_input_tokens: 0, model: 'm' })
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
 
   expect(await ui.find({ type: 'Text', text: /Cache cold in/ })).toBeDefined()
+  expect(await ui.findAll({ type: 'Svg' })).toHaveLength(2)
   await ui.unmount()
+
+  const short = await $.ui.mount({ ...BAND, surface: 'desktop', props: { ...BAND.props, maxRows: 2 } })
+
+  expect(await short.find({ type: 'Text', text: /Cache cold in/ })).toBeDefined()
+  await short.unmount()
+
+  const terminal = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+  expect(await terminal.find({ type: 'Text', text: /Cache cold in/ })).toBeDefined()
+  await terminal.unmount()
+})
+
+test('the row counts its own lines', () => {
+  expect(rowsOf(true, true, 0)).toBe(3)
+  expect(rowsOf(true, true, 2)).toBe(5)
+  expect(rowsOf(false, false, 0)).toBe(1)
 })

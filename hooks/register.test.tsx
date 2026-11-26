@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { blocksLit, endedTasks, etaLabel, liveKinds, figure, heat, overrun, parseEstimate, scene, strip, stripLit, workLabel } from './register'
+import { blocksLit, endedTasks, etaLabel, liveKinds, pausedFor, figure, heat, overrun, parseEstimate, scene, strip, stripLit, workLabel } from './register'
 
 const BAND = {
   plugin: 'context-heat',
@@ -100,6 +100,13 @@ test('held background tasks count until they go stale', () => {
 
   expect(liveKinds(held, 2000)).toEqual(['shell', 'workflow'])
   expect(liveKinds(held, 12 * 60 * 60 * 1000 + 500)).toEqual(['workflow'])
+})
+
+test('time asleep or closed is not counted', () => {
+  expect(pausedFor(0, 999_999)).toBe(0)
+  expect(pausedFor(100_000, 101_000)).toBe(0)
+  expect(pausedFor(100_000, 119_000)).toBe(0)
+  expect(pausedFor(100_000, 100_000 + 37_000_000)).toBe(36_999_000)
 })
 
 test('the row says idle with nothing running', async $ => {

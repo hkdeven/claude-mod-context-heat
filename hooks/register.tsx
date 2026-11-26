@@ -23,6 +23,9 @@ const tasks = atom({ plugin: 'context-heat', key: 'tasks' } as const, [])
 // A background task nothing has reported on for this long is taken to be gone.
 const TASK_TTL = 12 * 60 * 60 * 1000
 
+// A gap this long between one-second ticks means the Mac slept or the app was closed.
+const PAUSE = 20 * 1000
+
 const TASK_WORDS: Record<string, readonly [string, string]> = {
   shell: ['command', 'commands'],
   workflow: ['workflow', 'workflows'],
@@ -189,8 +192,21 @@ export function etaLabel(minutes: number, startedAt: number, now: number): { tex
     : { text: `${time} over the ${minutes} min estimate`, isOver: true }
 }
 
+// How far to move a countdown's start after a gap, so time asleep or closed is not counted.
+export function pausedFor(last: number, now: number): number {
+  return last > 0 && now - last > PAUSE ? now - last - 1000 : 0
+}
+
 async function tick($: EngineInterface): Promise<void> {
   const now = await $.clock.now()
+  const paused = pausedFor(await read($, clock), now)
+  const running = await read($, eta)
+
+  if (paused > 0 && running !== null) {
+    const moved: HeatEta = { minutes: running.minutes, startedAt: running.startedAt + paused }
+    await update($, eta, () => moved)
+  }
+
   await update($, clock, () => now)
 }
 
@@ -217,9 +233,6 @@ async function settle($: EngineInterface): Promise<void> {
   if (isMainRunning || held > 0 || (await read($, agents)) > 0) {
     return
   }
-
-  timer?.cancel()
-  timer = null
 
   if ((await read($, eta)) !== null) {
     await update($, eta, () => null)
@@ -307,6 +320,13 @@ async function setLook($: EngineInterface): Promise<void> {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    // Coming back after the app was closed: the turn and its background commands ended with it.
+    if (pausedFor(await read($, clock), await $.clock.now()) > 0) {
+      await update($, tasks, () => [])
+      await update($, eta, () => null)
+    }
+
+    startTimer($)
     await setLook($)
 
     await setTokens($, (await $.session.usage()).context.tokens)

@@ -41,7 +41,7 @@ Start a new session afterwards. Sessions that were already open pick the mod up 
 - The desktop app draws one background for the whole window, so in split view the blocks follow a single session. The row and its dots are always per session.
 - Running agents, background commands and background workflows all count as work, so a session waiting on a long command reads `Working: 1 command running`, not Idle. A command or workflow that was already running when the mod loaded is not counted, and neither is anything the app watches outside the session, such as a pull request's checks.
 - The countdown reads an estimate in minutes from Claude's reply: `Estimate: 10 minutes`, `Estimate: about 5 min` or `On it. Estimate 25 min`. A report of finished work, such as `estimate 15 min, actual 2`, does not start one. A new estimate replaces a running one.
-- The countdown runs until the main turn has ended and no agent is still running, so it keeps counting while background agents work.
+- The countdown runs until the main turn has ended and no agent is still running, so it keeps counting while background agents work. Time the Mac spends asleep or the app spends closed is not counted, and reopening the app after it was closed clears the countdown and any commands that ended with it.
 - In the terminal the dots are drawn as a short line of text characters.
 - The 600k limit is a constant, `LIMIT`, at the top of `hooks/register.tsx`.
 

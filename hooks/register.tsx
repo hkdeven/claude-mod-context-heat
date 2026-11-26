@@ -83,7 +83,7 @@ const tasks = atom({ plugin: 'context-heat', key: 'tasks' } as const, [])
 const crew = atom({ plugin: 'context-heat', key: 'crew' } as const, [])
 const agentEtas = atom({ plugin: 'context-heat', key: 'agentEtas' } as const, {})
 const listOpen = atom({ plugin: 'context-heat', key: 'listOpen' } as const, false)
-const waiting = atom({ plugin: 'context-heat', key: 'waiting' } as const, null)
+const waits = atom({ plugin: 'context-heat', key: 'waits' } as const, [])
 const cache = atom({ plugin: 'context-heat', key: 'cache' } as const, null)
 const compactions = atom({ plugin: 'context-heat', key: 'compactions' } as const, 0)
 const nudged = atom({ plugin: 'context-heat', key: 'nudged' } as const, false)
@@ -350,13 +350,17 @@ export function cacheLabel(
     : { text: 'Cache cold', isWarning: false }
 }
 
-// How long a reply's cache write lasts, in minutes, from the usage it reported; null where it wrote none.
-export function cacheTtl(usage: {
-  cache_creation_input_tokens?: number
-  cache_read_input_tokens?: number
-  ephemeral_5m_input_tokens?: number
-  ephemeral_1h_input_tokens?: number
-}): number | null {
+// How long a reply's cache lasts, in minutes, from the usage it reported: a write's own lifetime, else the
+// last write's (`previous`), else the constant; null where it neither read nor wrote.
+export function cacheTtl(
+  usage: {
+    cache_creation_input_tokens?: number
+    cache_read_input_tokens?: number
+    ephemeral_5m_input_tokens?: number
+    ephemeral_1h_input_tokens?: number
+  },
+  previous: number | null = null,
+): number | null {
   if ((usage.ephemeral_1h_input_tokens ?? 0) > 0) {
     return 60
   }
@@ -366,7 +370,7 @@ export function cacheTtl(usage: {
   }
 
   return (usage.cache_creation_input_tokens ?? 0) > 0 || (usage.cache_read_input_tokens ?? 0) > 0
-    ? CACHE_TTL_MINUTES
+    ? (previous ?? CACHE_TTL_MINUTES)
     : null
 }
 
@@ -615,30 +619,24 @@ async function addCommand($: EngineInterface): Promise<void> {
 async function startWaiting($: EngineInterface, kind: HeatWait['kind'], id: string, loop: string | undefined): Promise<void> {
   const now = await $.clock.now()
   const open: HeatWait = { kind, since: now, id, loop: loop ?? null }
-  await update($, waiting, () => open)
+  await update($, waits, list => [...(list ?? []).filter(wait => wait.id !== id), open])
 
   if (F.notifications && worthNotifying(await read($, busySince), now)) {
     await notify($, waitingText(await sessionTitle($)))
   }
 }
 
-// Ends the wait on that call, or every wait in that loop, or (neither given) any wait.
+// Ends the waits on that call, or in that loop, or (neither given) every wait.
+export function isEnded(wait: HeatWait, match: { id?: string; loop?: string | null }): boolean {
+  return (match.id === undefined || wait.id === match.id) && (match.loop === undefined || wait.loop === match.loop)
+}
+
 async function endWaiting($: EngineInterface, match: { id?: string; loop?: string | null }): Promise<void> {
-  const open = await read($, waiting)
+  const open = await read($, waits)
 
-  if (open === null) {
-    return
+  if (open.some(wait => isEnded(wait, match))) {
+    await update($, waits, list => (list ?? []).filter(wait => !isEnded(wait, match)))
   }
-
-  if (match.id !== undefined && open.id !== match.id) {
-    return
-  }
-
-  if (match.loop !== undefined && open.loop !== match.loop) {
-    return
-  }
-
-  await update($, waiting, () => null)
 }
 
 async function noteCache($: EngineInterface, at: number, ttlMinutes: number | null): Promise<void> {
@@ -658,6 +656,10 @@ export const register: Register = (on, options) => {
       await update($, tasks, () => [])
       await update($, eta, () => null)
     }
+
+    // A new start: nothing from before it is still waiting on the person or running.
+    await update($, waits, () => [])
+    await update($, busySince, () => null)
 
     startTimer($)
 
@@ -861,7 +863,7 @@ export const register: Register = (on, options) => {
       }
 
       if (F.cacheTimer && result.usage !== null) {
-        await noteCache($, sentAt, cacheTtl(result.usage)).catch(() => undefined)
+        await noteCache($, sentAt, cacheTtl(result.usage, (await read($, cache))?.ttlMinutes ?? null)).catch(() => undefined)
       }
     } else if (minutes !== null && F.agentList) {
       await noteAgentEstimate($, e.agentId, minutes).catch(() => undefined)
@@ -944,7 +946,7 @@ export const register: Register = (on, options) => {
       const count = await read($, tokens)
       const kinds = F.backgroundTasks ? (await read($, tasks)).map(task => task.kind) : []
       const isWorking = workLabel(e.props.isWorking, running, kinds) !== null
-      const open = F.waitingOnYou ? await read($, waiting) : null
+      const open = F.waitingOnYou ? ((await read($, waits))[0] ?? null) : null
       const estimate = F.countdown ? await read($, eta) : null
       const last = F.cacheTimer ? await read($, cache) : null
       const compacted = F.compactionCount ? compactionLabel(await read($, compactions)) : null

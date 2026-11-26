@@ -16,6 +16,7 @@ import {
   figure,
   hasRow,
   heat,
+  isEnded,
   isPersonAsked,
   liveKinds,
   nudgeDue,
@@ -437,6 +438,7 @@ test('the cache lifetime comes from the reply, else the constant', () => {
   expect(cacheTtl({ cache_creation_input_tokens: 10, ephemeral_1h_input_tokens: 10, ephemeral_5m_input_tokens: 0 })).toBe(60)
   expect(cacheTtl({ cache_creation_input_tokens: 10, ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 10 })).toBe(5)
   expect(cacheTtl({ cache_read_input_tokens: 10 })).toBe(60)
+  expect(cacheTtl({ cache_read_input_tokens: 10 }, 5)).toBe(5)
   expect(cacheTtl({ cache_creation_input_tokens: 0, cache_read_input_tokens: 0 })).toBe(null)
 })
 
@@ -492,6 +494,17 @@ test('compactionCount off: nothing is counted', { options: { compactionCount: fa
 test('the waiting line names what is open and for how long', () => {
   expect(waitingLabel('question', 0, 6 * 60_000 + 5_000)).toBe('Waiting on you: a question is open, 6 min')
   expect(waitingLabel('permission', 0, 20_000)).toBe('Waiting on you: a permission is open, 1 min')
+})
+
+test('a wait ends by its own call or its own loop, and two waits stay apart', () => {
+  const question = { kind: 'question', since: 0, id: 'q1', loop: null } as const
+  const permission = { kind: 'permission', since: 0, id: 'p1', loop: 'a1' } as const
+
+  expect(isEnded(question, { id: 'p1' })).toBe(false)
+  expect(isEnded(permission, { id: 'p1' })).toBe(true)
+  expect(isEnded(question, { loop: null })).toBe(true)
+  expect(isEnded(permission, { loop: null })).toBe(false)
+  expect(isEnded(permission, {})).toBe(true)
 })
 
 test('only an ask a person answers counts as waiting', () => {

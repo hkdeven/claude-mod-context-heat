@@ -16,7 +16,7 @@ declare module 'claude-code' {
       crew: HeatAgent[]
       agentEtas: Record<string, HeatAgentEta>
       listOpen: boolean
-      waiting: HeatWait | null
+      waits: HeatWait[]
       cache: HeatCache | null
       compactions: number
       nudged: boolean

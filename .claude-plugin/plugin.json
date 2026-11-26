@@ -1,6 +1,104 @@
 {
   "name": "context-heat",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Background blocks that stack up and warm toward 600k context tokens, plus a row that says whether work is still running.",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "backdrop": {
+      "type": "boolean",
+      "title": "backdrop",
+      "description": "Faint blocks behind the conversation in the desktop app that stack up as the context fills.",
+      "default": true
+    },
+    "dots": {
+      "type": "boolean",
+      "title": "dots",
+      "description": "The strip of 240 dots across the row, one for every 2.5k tokens.",
+      "default": true
+    },
+    "contextFigure": {
+      "type": "boolean",
+      "title": "contextFigure",
+      "description": "The context figure on the right of the row, for example \"362k of 600k\".",
+      "default": true
+    },
+    "workStatus": {
+      "type": "boolean",
+      "title": "workStatus",
+      "description": "\"Working: ...\" or \"Idle: nothing running\" on the left of the row.",
+      "default": true
+    },
+    "backgroundTasks": {
+      "type": "boolean",
+      "title": "backgroundTasks",
+      "description": "Counts background commands and workflows as work (\"1 command running\"). Shows only with workStatus.",
+      "default": true
+    },
+    "countdown": {
+      "type": "boolean",
+      "title": "countdown",
+      "description": "The countdown from Claude's \"Estimate: N minutes\", for example \"6:40 left of 10 min\".",
+      "default": true
+    },
+    "estimateNote": {
+      "type": "boolean",
+      "title": "estimateNote",
+      "description": "A short note on each prompt asking Claude to state an estimate. Only added while countdown or notifications is on, since nothing else reads the estimate.",
+      "default": true
+    },
+    "handoffWarning": {
+      "type": "boolean",
+      "title": "handoffWarning",
+      "description": "At 600k: the status line entry, the figure in the warning colour and the slow pulse of the background.",
+      "default": true
+    },
+    "redPastLimit": {
+      "type": "boolean",
+      "title": "redPastLimit",
+      "description": "From 600k to 750k the dots and background blocks deepen to dark red.",
+      "default": true
+    },
+    "handoffNudge": {
+      "type": "boolean",
+      "title": "handoffNudge",
+      "description": "Once per session at 585k, a notice to run /handoff; also adds the /handoff command.",
+      "default": true
+    },
+    "cacheTimer": {
+      "type": "boolean",
+      "title": "cacheTimer",
+      "description": "\"Cache warm\", then \"Cache cold in m:ss\", then \"Cache cold\", on a small line under the row.",
+      "default": true
+    },
+    "compactionCount": {
+      "type": "boolean",
+      "title": "compactionCount",
+      "description": "\"Compacted 2 times\" on the small line under the row; hidden until the first compaction.",
+      "default": true
+    },
+    "waitingOnYou": {
+      "type": "boolean",
+      "title": "waitingOnYou",
+      "description": "The row turns amber and says \"Waiting on you\" while a question or a permission prompt is open.",
+      "default": true
+    },
+    "notifications": {
+      "type": "boolean",
+      "title": "notifications",
+      "description": "A system notification when a session is done, or starts waiting on you. Not for turns under 30 seconds.",
+      "default": true
+    },
+    "agentList": {
+      "type": "boolean",
+      "title": "agentList",
+      "description": "\"N agents running\" opens a list of the agents with a countdown each. Shows only with workStatus.",
+      "default": true
+    },
+    "sleepFix": {
+      "type": "boolean",
+      "title": "sleepFix",
+      "description": "Leaves out time the Mac sleeps or the app is closed, and clears stale work after a restart.",
+      "default": true
+    }
+  }
 }

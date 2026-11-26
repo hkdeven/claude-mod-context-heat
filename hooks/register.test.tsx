@@ -17,6 +17,7 @@ import {
   hasRow,
   heat,
   isEnded,
+  isStale,
   isPersonAsked,
   liveKinds,
   nudgeDue,
@@ -645,4 +646,26 @@ test('agentList off: the agent count is plain text with no list', { options: { a
 test('sleepFix off: a gap in the ticks is counted as time', () => {
   expect(features({ sleepFix: false }).sleepFix).toBe(false)
   expect(pausedFor(100_000, 100_000 + 37_000_000, false)).toBe(0)
+})
+
+test('a countdown far past its estimate is dropped as stale', () => {
+  const hour = { minutes: 60, startedAt: 0 }
+
+  expect(isStale(hour, 60 * 60_000 + 4 * 3_600_000)).toBe(false)
+  expect(isStale(hour, 60 * 60_000 + 4 * 3_600_000 + 1000)).toBe(true)
+  expect(isStale(hour, 688 * 60_000 + 60 * 60_000)).toBe(true)
+
+  const long = { minutes: 120, startedAt: 0 }
+
+  expect(isStale(long, 120 * 60_000 + 5 * 3_600_000)).toBe(false)
+  expect(isStale(long, 120 * 60_000 + 6 * 3_600_000 + 1000)).toBe(true)
+})
+
+test('the cache line sits on the top row, beside the figure', async ($, on) => {
+  const w = world(on)
+  await step($, w, '', undefined, { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 5, cache_creation_input_tokens: 0, model: 'm' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+
+  expect(await ui.find({ type: 'Text', text: /Cache cold in/ })).toBeDefined()
+  await ui.unmount()
 })

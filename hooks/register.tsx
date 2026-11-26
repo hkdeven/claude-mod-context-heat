@@ -26,9 +26,9 @@ export const FEATURES = {
   redPastLimit: true,
   // Once per session at 585k, a notice to run /handoff; also adds the /handoff command.
   handoffNudge: true,
-  // "Cache warm", then "Cache cold in m:ss", then "Cache cold", on a small line under the row.
+  // "Cache warm", then "Cache cold in m:ss", then "Cache cold", on the right of the row, beside the figure.
   cacheTimer: true,
-  // "Compacted 2 times" on the small line under the row; hidden until the first compaction.
+  // "Compacted 2 times" beside the cache timer; hidden until the first compaction.
   compactionCount: true,
   // The row turns amber and says "Waiting on you" while a question or a permission prompt is open.
   waitingOnYou: true,
@@ -66,6 +66,9 @@ const NUDGE_TEXT = '585k: run /handoff, then open a new session'
 // How long the prompt cache is taken to last when a reply does not say. An assumption: the engine
 // reports the lifetime of each cache write (5 minutes or 1 hour) and that is used where it is given.
 export const CACHE_TTL_MINUTES = 60
+
+// A countdown more than this many hours over (and 3 times its estimate) is dropped as stale.
+export const STALE_HOURS = 4
 
 // Work shorter than this raises no notification.
 export const NOTIFY_FLOOR = 30 * 1000
@@ -424,6 +427,22 @@ function needsClock(): boolean {
   return F.countdown || F.cacheTimer || F.waitingOnYou || F.agentList
 }
 
+// A countdown this far over is left from a sleep or restart the mod did not see (an older build, a lost
+// tick): more than 4 hours over, or 3 times its estimate over, whichever is larger.
+export function isStale(estimate: HeatEta, now: number): boolean {
+  const over = now - estimate.startedAt - estimate.minutes * 60_000
+
+  return over > Math.max(STALE_HOURS * 3_600_000, 3 * estimate.minutes * 60_000)
+}
+
+async function dropStale($: EngineInterface, now: number): Promise<void> {
+  const running = await read($, eta)
+
+  if (running !== null && isStale(running, now)) {
+    await update($, eta, () => null)
+  }
+}
+
 async function tick($: EngineInterface): Promise<void> {
   const now = await $.clock.now()
   const paused = pausedFor(await read($, clock), now, F.sleepFix)
@@ -434,6 +453,7 @@ async function tick($: EngineInterface): Promise<void> {
     await update($, eta, () => moved)
   }
 
+  await dropStale($, now)
   await update($, clock, () => now)
 }
 
@@ -657,6 +677,8 @@ export const register: Register = (on, options) => {
       await update($, eta, () => null)
     }
 
+    await dropStale($, await $.clock.now())
+
     // A new start: nothing from before it is still waiting on the person or running.
     await update($, waits, () => [])
     await update($, busySince, () => null)
@@ -688,7 +710,15 @@ export const register: Register = (on, options) => {
   })
 
   on('session.measure', async ($, e, next) => {
+    // A hot reload stops the old timer and raises no session.start: start it again here and at each turn.
+    startTimer($)
     await setTokens($, e.context.tokens)
+
+    // A turn ended: where no request was seen yet (a reload mid-session), start the cache line from now.
+    if (F.cacheTimer && e.changed.includes('context') && (await read($, cache)) === null) {
+      const at = await $.clock.now()
+      await noteCache($, at, CACHE_TTL_MINUTES).catch(() => undefined)
+    }
 
     return next(e)
   })
@@ -831,6 +861,8 @@ export const register: Register = (on, options) => {
   }
 
   on('turn.start', async ($, e, next) => {
+    startTimer($)
+
     if (e.agentId === undefined) {
       isMainRunning = true
 
@@ -1006,11 +1038,19 @@ export const register: Register = (on, options) => {
                 <Text color={countdown.isOver ? 'warning' : undefined}>{countdown.text}</Text>
               )}
             </Box>
-            {F.contextFigure ? (
-              <Text color={isLimit ? 'warning' : undefined} dimColor={!isLimit}>
-                {figure(count, F.handoffWarning)}
-              </Text>
-            ) : null}
+            <Box flexDirection="row" gap={2}>
+              {cached === null ? null : (
+                <Text color={cached.isWarning ? 'warning' : undefined} dimColor={!cached.isWarning}>
+                  {cached.text}
+                </Text>
+              )}
+              {compacted === null ? null : <Text dimColor>{compacted}</Text>}
+              {F.contextFigure ? (
+                <Text color={isLimit ? 'warning' : undefined} dimColor={!isLimit}>
+                  {figure(count, F.handoffWarning)}
+                </Text>
+              ) : null}
+            </Box>
           </Box>
           {team.length === 0 ? null : (
             <Box flexDirection="column" paddingLeft={2}>
@@ -1029,16 +1069,6 @@ export const register: Register = (on, options) => {
             </Box>
           )}
           {blocks}
-          {cached === null && compacted === null ? null : (
-            <Box flexDirection="row" gap={2}>
-              {cached === null ? null : (
-                <Text color={cached.isWarning ? 'warning' : undefined} dimColor={!cached.isWarning}>
-                  {cached.text}
-                </Text>
-              )}
-              {compacted === null ? null : <Text dimColor>{compacted}</Text>}
-            </Box>
-          )}
         </Box>
       )
     })

@@ -10,6 +10,18 @@ The row above the message box: work status, countdown, context figure and dots.
 
 Each session gets a row above the message box. It says whether work is running, counts down Claude's own time estimate, and shows how full the context is. In the desktop app a faint background of blocks fills up behind the conversation as the context grows. Near the limit the mod reminds you to write the handoff and start a new session. Every feature can be turned off on its own.
 
+## Terms used
+
+- **Context:** everything Claude reads on each turn: your messages, its replies, files it opened and tool results. It is counted in tokens (roughly three quarters of a word each), so `362k` means about 362,000 tokens.
+- **Why 600k:** the context window holds far more, but a very long conversation gets slower, costs more per message, and Claude keeps track of early details less well. Around 600k is a good point to wrap up and start fresh. The figure is a constant you can change (see Good to know).
+- **Handoff:** a short document saying where the work stands and what comes next, so a new session can pick it up without re-reading the old one.
+- **Prompt cache, warm and cold:** after each message, Claude's service keeps the conversation it has already read for a short time. While it is kept (warm), your next message reuses it, so it is cheaper and starts faster. Once that time runs out (cold), the next message has to read the whole conversation again at full price. Nothing breaks and nothing is lost; it only costs more and takes a little longer. Warm is good. If you mean to carry on, reply before it goes cold.
+- **Compaction:** when the context gets close to full, Claude Code shrinks the conversation into a summary to make room. Work carries on, but fine details from earlier can be lost, so after a compaction or two it is often better to write the handoff and start a new session.
+- **Agent:** a helper Claude starts to do part of the work in parallel, such as a search or a test run. It has its own short task and reports back when done.
+- **Background command or workflow:** a long command or multi-step job Claude started that keeps running after its reply ends, such as a test suite.
+- **Estimate:** the total time Claude says a piece of work will take, stated as `Estimate: 10 minutes` before it starts.
+- **Status line:** the short line of text under the message box.
+
 ## Features
 
 Each feature has a switch name, used in both ways of turning it off (see below).
@@ -74,13 +86,13 @@ Once per session, when the context first reaches 585k, a notice says `585k: run 
 
 ### Cache timer (`cacheTimer`)
 
-On a small line under the dots, after a database icon: `Cache warm` while work runs, then a live `Cache cold in 4:59` once the session is idle (amber in the last minute), then `Cache cold`.
+On a small line under the dots, after a database icon: `Cache warm` while work runs, then a live `Cache cold in 4:59` once the session is idle (amber in the last minute), then `Cache cold`. Warm means your next message is cheaper and quicker; cold means it reads the whole conversation again at full price (see Terms used). The countdown tells you how long you have to reply while it is still warm.
 
 ![The small line of the row with a database icon and Cache cold in 0:48 in amber](docs/features/cacheTimer.png)
 
 ### Compaction count (`compactionCount`)
 
-On the same small line, after an icon of two arrows pointing in: `Compacted 1 time` or `Compacted 3 times`. Hidden until the first compaction.
+On the same small line, after an icon of two arrows pointing in: `Compacted 1 time` or `Compacted 3 times`. Hidden until the first compaction. Each compaction squeezes earlier detail into a summary, so a rising count is a sign to write the handoff and start a new session (see Terms used).
 
 ![The small line of the row with an icon of two arrows pointing in and Compacted 1 time](docs/features/compactionCount.png)
 

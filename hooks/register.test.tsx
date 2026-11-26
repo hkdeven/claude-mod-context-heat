@@ -434,6 +434,7 @@ test('the cache line reads warm, counts down to cold, then cold', () => {
   expect(cacheLabel(false, last, 250_000)).toEqual({ text: 'Cache cold in 0:50', isWarning: true })
   expect(cacheLabel(false, last, 300_000)).toEqual({ text: 'Cache cold', isWarning: false })
   expect(cacheLabel(false, null, 0)).toBe(null)
+  expect(cacheLabel(true, null, 0)).toEqual({ text: 'Cache warm', isWarning: false })
 })
 
 test('the cache lifetime comes from the reply, else the constant', () => {
@@ -686,4 +687,13 @@ test('the row counts its own lines', () => {
   expect(rowsOf(true, true, 0)).toBe(3)
   expect(rowsOf(true, true, 2)).toBe(5)
   expect(rowsOf(false, false, 0)).toBe(1)
+})
+
+test('a working session reads Cache warm on its own line, before any request has answered', async ($, on) => {
+  world(on)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop', props: { ...BAND.props, isWorking: true } })
+
+  expect(await ui.find({ type: 'Text', text: 'Cache warm' })).toBeDefined()
+  expect(await ui.findAll({ type: 'Svg' })).toHaveLength(2)
+  await ui.unmount()
 })

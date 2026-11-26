@@ -354,12 +354,13 @@ export function cacheLabel(
   last: HeatCache | null,
   now: number,
 ): { text: string; isWarning: boolean } | null {
-  if (last === null) {
-    return null
-  }
-
+  // Work running keeps the cache warm, whether or not a request has been seen yet (a reload mid-turn).
   if (isActive) {
     return { text: 'Cache warm', isWarning: false }
+  }
+
+  if (last === null) {
+    return null
   }
 
   const left = Math.ceil((last.at + last.ttlMinutes * 60_000 - now) / 1000)
@@ -900,6 +901,11 @@ export const register: Register = (on, options) => {
     // A new request in a loop means the tools of its last step have all finished.
     if (isWatchingWaits) {
       await endWaiting($, { loop: e.agentId ?? null }).catch(() => undefined)
+    }
+
+    // The request is on its way: the main loop's cache counts from now, its lifetime set when it answers.
+    if (e.agentId === undefined && F.cacheTimer && (await read($, cache)) === null) {
+      await noteCache($, sentAt, CACHE_TTL_MINUTES).catch(() => undefined)
     }
 
     const result = yield* next(e)

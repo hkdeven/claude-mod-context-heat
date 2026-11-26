@@ -580,13 +580,6 @@ async function pruneTasks($: EngineInterface): Promise<void> {
   }
 }
 
-// Where the engine's own Stop report reaches the mod, it is the whole truth.
-async function setTasks($: EngineInterface, reported: readonly { id: string; type: string }[]): Promise<void> {
-  const at = await $.clock.now()
-  const next: HeatTask[] = reported.filter(task => task.type !== 'subagent').map(task => ({ id: task.id, kind: task.type, at }))
-  await update($, tasks, () => next)
-}
-
 async function countAgents($: EngineInterface): Promise<void> {
   const list = await $.agent.list()
   const live = list.filter(agent => agent.status === 'pending' || agent.status === 'running' || agent.status === 'waiting')
@@ -944,21 +937,6 @@ export const register: Register = (on, options) => {
     }
 
     await settle($).catch(() => undefined)
-
-    return result
-  })
-
-  on('classic.Stop', async ($, e, next) => {
-    const result = await next(e)
-
-    if (e.agent_id === undefined) {
-      if (F.backgroundTasks) {
-        await setTasks($, e.background_tasks ?? []).catch(() => undefined)
-      }
-
-      await countAgents($).catch(() => undefined)
-      await settle($).catch(() => undefined)
-    }
 
     return result
   })
